@@ -1,0 +1,25 @@
+{
+    "name": "atoms/contanier",
+    "description": "Implementations of PSR-11.",
+    "homepage": "https://bitbucket.org/gotamedia/container",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Peter Pettersson",
+            "email": "peter.pettersson@gotamedia.se"
+        }    ],
+    "autoload": {
+        "psr-4": {
+            "Atoms\\Container\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=7.1.0",
+        "psr/container": "~1.0.0"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "phpcs --standard=PSR2 src"
+    }
+}
