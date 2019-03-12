@@ -1,5 +1,5 @@
 {
-    "name": "atoms/contanier",
+    "name": "atoms/container",
     "description": "Implementations of PSR-11.",
     "homepage": "https://bitbucket.org/gotamedia/container",
     "type": "library",
@@ -8,7 +8,8 @@
         {
             "name": "Peter Pettersson",
             "email": "peter.pettersson@gotamedia.se"
-        }    ],
+        }
+    ],
     "autoload": {
         "psr-4": {
             "Atoms\\Container\\": "src/"
