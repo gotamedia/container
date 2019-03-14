@@ -113,7 +113,7 @@ class Container implements ContainerInterface
      */
     public function share(string $abstract, $concrete = null)
     {
-        $this->bind($abstract, $concrete, true);
+        $this->bind($abstract, $concrete, self::BIND_SHARED);
     }
 
     /**
