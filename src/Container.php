@@ -15,6 +15,16 @@ use ReflectionParameter;
 class Container implements ContainerInterface
 {
     /**
+     * @var int
+     */
+    public const BIND_SHARED = 0;
+
+    /**
+     * @var int
+     */
+    public const BIND_NONSHARED = 1;
+
+    /**
      * @var array
      */
     public $instances = [];
@@ -70,9 +80,9 @@ class Container implements ContainerInterface
      *
      * @param string $abstract
      * @param string|\Closure $concrete
-     * @param bool $shared
+     * @param int $shared
      */
-    public function bind(string $abstract, $concrete = null, bool $shared = false)
+    public function bind(string $abstract, $concrete = null, int $shared = self::BIND_NONSHARED)
     {
         /**
          * If no concrete type was given, set the concrete type to the abstract
@@ -176,9 +186,9 @@ class Container implements ContainerInterface
      */
     public function isShared(string $abstract): bool
     {
-        $shared = $this->bindings[$abstract]['shared'] ?? false;
+        $shared = $this->bindings[$abstract]['shared'] ?? self::BIND_NONSHARED;
 
-        return isset($this->instances[$abstract]) || $shared;
+        return isset($this->instances[$abstract]) || $shared === self::BIND_SHARED;
     }
 
     /**
@@ -266,11 +276,17 @@ class Container implements ContainerInterface
              */
             if (array_key_exists($parameter->name, $primitives)) {
                 $dependencies[] = $primitives[$parameter->name];
-            } elseif (is_null($dependency)) {
-                $dependencies[] = $this->resolveNonClass($parameter);
-            } else {
-                $dependencies[] = $this->resolveClass($parameter);
+
+                continue;
             }
+
+            if (is_null($dependency)) {
+                $dependencies[] = $this->resolveNonClass($parameter);
+
+                continue;
+            }
+
+            $dependencies[] = $this->resolveClass($parameter);
         }
 
         return (array)$dependencies;
