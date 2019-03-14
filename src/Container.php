@@ -143,7 +143,7 @@ class Container implements ContainerInterface
          * recursively until all have gotten resolved.
          */
         $object = $this->isBuildable($concrete, $abstract) ?
-            $this->build($concrete, $parameters) :
+            $this->build($concrete, $parameters):
             $this->make($concrete, $parameters);
 
         /**
@@ -200,13 +200,13 @@ class Container implements ContainerInterface
     /**
      * Instantiate a concrete instance of the given type.
      *
-     * @param string $concrete
+     * @param string|\Closure $concrete
      * @param array $parameters
      * @return mixed
      * @throws \Atoms\Container\NotFoundException
      * @throws \Atoms\Container\ContainerException
      */
-    protected function build(string $concrete, array $parameters = [])
+    protected function build($concrete, array $parameters = [])
     {
         if ($concrete instanceof Closure) {
             return $concrete($this, $parameters);
