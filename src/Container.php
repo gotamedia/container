@@ -51,11 +51,27 @@ class Container implements ContainerInterface
 
     /**
      * {@inheritDoc}
+     *
+     * @throws \InvalidArgumentException
      */
     public function has($id)
     {
         if (!is_string($id)) {
-            return false;
+            throw new InvalidArgumentException('Invalid ID; must be string');
+        }
+
+        $concrete = $this->getConcrete($id);
+
+        if ($concrete instanceof Closure) {
+            return true;
+        }
+
+        /**
+         * If the ID is bound to a different type, run the method again with
+         * the bound concrete type as ID.
+         */
+        if ($id !== $concrete) {
+            return $this->has($concrete);
         }
 
         if (isset($this->instances[$id])) {
@@ -82,8 +98,11 @@ class Container implements ContainerInterface
      * @param string|\Closure $concrete
      * @param int $shared
      */
-    public function bind(string $abstract, $concrete = null, int $shared = self::BIND_NONSHARED)
-    {
+    public function bind(
+        string $abstract,
+        $concrete = null,
+        int $shared = self::BIND_NONSHARED
+    ): void {
         /**
          * If no concrete type was given, set the concrete type to the abstract
          * type. This allows the concrete type to be registered as shared
@@ -111,7 +130,7 @@ class Container implements ContainerInterface
      * @param string $abstract
      * @param string|null|\Closure $concrete
      */
-    public function share(string $abstract, $concrete = null)
+    public function share(string $abstract, $concrete = null): void
     {
         $this->bind($abstract, $concrete, self::BIND_SHARED);
     }
@@ -122,7 +141,7 @@ class Container implements ContainerInterface
      * @param string $abstract
      * @param mixed $instance
      */
-    public function instance(string $abstract, $instance)
+    public function instance(string $abstract, $instance): void
     {
         $this->instances[$abstract] = $instance;
     }
