@@ -6,8 +6,8 @@ namespace Atoms\Container;
 
 use Closure;
 use InvalidArgumentException;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
-use Psr\Container\NotFoundExceptionInterface;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionParameter;
@@ -322,7 +322,7 @@ class Container implements ContainerInterface
     {
         try {
             return $this->make($parameter->getClass()->name);
-        } catch (ContainerException $exception) {
+        } catch (ContainerExceptionInterface $exception) {
             /**
              * If the class instance could not be resolved, check if the value is optional.
              * If so, return the optional parameter value as the value of the dependency.
