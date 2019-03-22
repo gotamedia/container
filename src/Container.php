@@ -60,18 +60,8 @@ class Container implements ContainerInterface
             throw new InvalidArgumentException('Invalid ID; must be string');
         }
 
-        $concrete = $this->getConcrete($id);
-
-        if ($concrete instanceof Closure) {
+        if (isset($this->bindings[$id])) {
             return true;
-        }
-
-        /**
-         * If the ID is bound to a different type, run the method again with
-         * the bound concrete type as ID.
-         */
-        if ($id !== $concrete) {
-            return $this->has($concrete);
         }
 
         if (isset($this->instances[$id])) {
