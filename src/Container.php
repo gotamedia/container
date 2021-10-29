@@ -70,7 +70,7 @@ class Container implements ContainerInterface
 
         try {
             $reflector = new ReflectionClass($id);
-        } catch (ReflectionException $exception) {
+        } catch (ReflectionException) {
             return false;
         }
 
@@ -85,7 +85,7 @@ class Container implements ContainerInterface
      * Register a binding.
      *
      * @param string $abstract
-     * @param string|\Closure $concrete
+     * @param string|null|\Closure $concrete
      * @param int $shared
      */
     public function bind(
@@ -161,9 +161,9 @@ class Container implements ContainerInterface
          * This will instantiate the types and resolve any of the nested dependencies
          * recursively until all have gotten resolved.
          */
-        $object = $this->isBuildable($concrete, $abstract) ?
-            $this->build($concrete, $parameters):
-            $this->make($concrete, $parameters);
+        $object = $this->isBuildable($concrete, $abstract)
+            ? $this->build($concrete, $parameters)
+            : $this->make($concrete, $parameters);
 
         /**
          * If the requested type is registered as shared (singleton), make sure
@@ -233,7 +233,7 @@ class Container implements ContainerInterface
 
         try {
             $reflector = new ReflectionClass($concrete);
-        } catch (ReflectionException $exception) {
+        } catch (ReflectionException) {
             throw new NotFoundException("The class {$concrete} could not be found");
         }
 
@@ -249,7 +249,7 @@ class Container implements ContainerInterface
          * any other types or dependencies out of these containers.
          */
         if (is_null($constructor)) {
-            return new $concrete;
+            return new $concrete();
         }
 
         $dependencies = $constructor->getParameters();
@@ -277,11 +277,13 @@ class Container implements ContainerInterface
         $dependencies = [];
 
         foreach ($parameters as $parameter) {
-            $dependency = $parameter->getClass();
+            $dependency = $parameter->getType();
 
             /**
              * If the class could not be retrieved (null), it means the dependency
              * is a string or other primitive type which is non-resolvable.
+             *
+             * @todo Shouldn't this be placed within the null check for the dependency?
              */
             if (array_key_exists($parameter->name, $primitives)) {
                 $dependencies[] = $primitives[$parameter->name];
@@ -298,7 +300,7 @@ class Container implements ContainerInterface
             $dependencies[] = $this->resolveClass($parameter);
         }
 
-        return (array)$dependencies;
+        return $dependencies;
     }
 
     /**
@@ -311,7 +313,11 @@ class Container implements ContainerInterface
     protected function resolveClass(ReflectionParameter $parameter)
     {
         try {
-            return $this->make($parameter->getClass()->name);
+            $name = $parameter->getType() && !$parameter->getType()->isBuiltin()
+                ? $parameter->getType()->getName()
+                : null;
+
+                return $this->make($name);
         } catch (ContainerExceptionInterface $exception) {
             /**
              * If the class instance could not be resolved, check if the value is optional.
@@ -340,7 +346,7 @@ class Container implements ContainerInterface
 
         throw new ContainerException(
             "Unresolvable dependency resolving {$parameter} in class " .
-            $parameter->getDeclaringClass()->getName()
+            $parameter->getDeclaringClass()?->getName()
         );
     }
 
