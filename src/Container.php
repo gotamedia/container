@@ -317,7 +317,12 @@ class Container implements ContainerInterface
                 ? $parameter->getType()->getName()
                 : null;
 
+                if (is_null($name)) {
+                    throw new ContainerException('Could not resolve class dependency');
+                }
+
                 return $this->make($name);
+
         } catch (ContainerExceptionInterface $exception) {
             /**
              * If the class instance could not be resolved, check if the value is optional.
