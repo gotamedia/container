@@ -352,7 +352,7 @@ return [
         'vendor/phan/phan/src/Phan',
         'vendor/phpunit/phpunit/src',
         'vendor/psr/container/src',
-        'vendor/psr/log/Psr/Log',
+        'vendor/psr/log/src',
     ],
 
     // A list of individual files to include in analysis
