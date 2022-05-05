@@ -10,34 +10,16 @@ use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionNamedType;
 use ReflectionParameter;
+use RuntimeException;
 
 class Container implements ContainerInterface
 {
-    /**
-     * @var int
-     */
     public const BIND_SHARED = 0;
-
-    /**
-     * @var int
-     */
     public const BIND_NONSHARED = 1;
-
-    /**
-     * @var array
-     */
-    public $instances = [];
-
-    /**
-     * @var array
-     */
-    public $resolved = [];
-
-    /**
-     * @var array
-     */
-    public $bindings = [];
+    public array $instances = [];
+    public array $bindings = [];
 
     /**
      * {@inheritDoc}
@@ -85,7 +67,7 @@ class Container implements ContainerInterface
      * Register a binding.
      *
      * @param string $abstract
-     * @param string|null|\Closure $concrete
+     * @param string|\Closure|null $concrete
      * @param int $shared
      */
     public function bind(
@@ -146,9 +128,8 @@ class Container implements ContainerInterface
     public function make(string $abstract, array $parameters = [])
     {
         /**
-         * If a shared instance of the requested type already has been created,
-         * just return the existing instance so it will always be the same one
-         * returned.
+         * If a shared instance of the requested type has already been created,
+         * return the existing instance instead of instantiating a new one.
          */
         if (isset($this->instances[$abstract])) {
             return $this->instances[$abstract];
@@ -217,7 +198,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Instantiate a concrete instance of the given type.
+     * Instantiate a concrete instance of a specific type.
      *
      * @param string|\Closure $concrete
      * @param array $parameters
@@ -227,6 +208,7 @@ class Container implements ContainerInterface
      */
     protected function build($concrete, array $parameters = [])
     {
+        /** If the concrete type is a closure, execute it and return the results */
         if ($concrete instanceof Closure) {
             return $concrete($this, $parameters);
         }
@@ -256,11 +238,17 @@ class Container implements ContainerInterface
 
         /**
          * Create each of the dependency instances and use the reflection instances
-         * to make new instance of this class, injecting the created dependencies in.
+         * to make a new instance of this class, injecting the created dependencies.
          */
-        $parameters = $this->keyParametersByArgument($dependencies, $parameters);
-
-        $instances = $this->getDependencies($dependencies, $parameters);
+        try {
+            $instances = $this->resolveDependencies($dependencies, $parameters);
+        } catch (RuntimeException $exception) {
+            throw new ContainerException(sprintf(
+                'Unable to instantiate %s; %s',
+                $concrete,
+                lcfirst($exception->getMessage())
+            ));
+        }
 
         return $reflector->newInstanceArgs($instances);
     }
@@ -268,39 +256,28 @@ class Container implements ContainerInterface
     /**
      * Resolve all of the dependencies from the ReflectionParameters.
      *
+     * @param array $dependencies
      * @param array $parameters
-     * @param array $primitives
      * @return array
      */
-    protected function getDependencies(array $parameters, array $primitives = []): array
+    protected function resolveDependencies(array $dependencies, array $parameters): array
     {
-        $dependencies = [];
+        $instances = [];
 
-        foreach ($parameters as $parameter) {
-            $dependency = $parameter->getType();
-
-            /**
-             * If the class could not be retrieved (null), it means the dependency
-             * is a string or other primitive type which is non-resolvable.
-             *
-             * @todo Shouldn't this be placed within the null check for the dependency?
-             */
-            if (array_key_exists($parameter->name, $primitives)) {
-                $dependencies[] = $primitives[$parameter->name];
+        foreach ($dependencies as $dependency) {
+            /** Check for a parameter override for this dependency */
+            if (array_key_exists($dependency->name, $parameters)) {
+                $instances[] = $parameters[$dependency->name];
 
                 continue;
             }
 
-            if (is_null($dependency)) {
-                $dependencies[] = $this->resolveNonClass($parameter);
-
-                continue;
-            }
-
-            $dependencies[] = $this->resolveClass($parameter);
+            $instances[] = is_null($this->getParameterClassName($dependency))
+                ? $this->resolvePrimitive($dependency)
+                : $this->resolveClass($dependency);
         }
 
-        return $dependencies;
+        return $instances;
     }
 
     /**
@@ -313,22 +290,19 @@ class Container implements ContainerInterface
     protected function resolveClass(ReflectionParameter $parameter)
     {
         try {
-            $name = $parameter->getType() && !$parameter->getType()->isBuiltin()
-                ? $parameter->getType()->getName()
-                : null;
+            $name = $this->getParameterClassName($parameter);
 
-                if (is_null($name)) {
-                    throw new ContainerException('Could not resolve class dependency');
-                }
+            if (is_null($name)) {
+                throw new RuntimeException("Unresolvable dependency {$parameter->getName()}");
+            }
 
-                return $this->make($name);
-
+            return $this->make($name);
         } catch (ContainerExceptionInterface $exception) {
             /**
              * If the class instance could not be resolved, check if the value is optional.
              * If so, return the optional parameter value as the value of the dependency.
              */
-            if ($parameter->isOptional()) {
+            if ($parameter->isDefaultValueAvailable()) {
                 return $parameter->getDefaultValue();
             }
 
@@ -343,36 +317,13 @@ class Container implements ContainerInterface
      * @return mixed
      * @throws \Atoms\Container\ContainerException
      */
-    protected function resolveNonClass(ReflectionParameter $parameter)
+    protected function resolvePrimitive(ReflectionParameter $parameter)
     {
         if ($parameter->isDefaultValueAvailable()) {
             return $parameter->getDefaultValue();
         }
 
-        throw new ContainerException(
-            "Unresolvable dependency resolving {$parameter} in class " .
-            $parameter->getDeclaringClass()?->getName()
-        );
-    }
-
-    /**
-     * If extra parameters are passed by numeric ID, re-key them by argument name.
-     *
-     * @param array $dependencies
-     * @param array $parameters
-     * @return array
-     */
-    protected function keyParametersByArgument(array $dependencies, array $parameters): array
-    {
-        foreach ($parameters as $key => $value) {
-            if (is_numeric($key)) {
-                unset($parameters[$key]);
-
-                $parameters[$dependencies[$key]->name] = $value;
-            }
-        }
-
-        return $parameters;
+        throw new RuntimeException("Unresolvable dependency {$parameter->getName()}");
     }
 
     /**
@@ -384,15 +335,32 @@ class Container implements ContainerInterface
     protected function getConcrete(string $abstract)
     {
         /**
-         * If no registered binding was found for the type, just assume the type
-         * is a concrete name and attempt to resolve it as is since the container
+         * If no registered binding was found for the type, assume the type is
+         * a concrete name and attempt to resolve it as is since the container
          * should be able to resolve concretes automatically.
          */
-        if (!isset($this->bindings[$abstract])) {
-            return $abstract;
+        if (array_key_exists($abstract, $this->bindings)) {
+            return $this->bindings[$abstract]['concrete'];
         }
 
-        return $this->bindings[$abstract]['concrete'];
+        return $abstract;
+    }
+
+    /**
+     * Returns, if possible, the class name of a speific parameter.
+     *
+     * @param \ReflectionParameter $parameter
+     * @return string|null
+     */
+    protected function getParameterClassName(ReflectionParameter $parameter): ?string
+    {
+        $type = $parameter->getType();
+
+        if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
+            return null;
+        }
+
+        return $type->getName();
     }
 
     /**
